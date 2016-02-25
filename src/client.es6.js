@@ -26,32 +26,31 @@ class ClientApp extends App {
     this.state = state || {};
   }
 
-  buildRequest (url) {
-    var splitUrl = url.split('?');
-    var query = {};
-    var url = url || '/';
+  buildRequest (requestUrl) {
+    let splitUrl = requestUrl.split('?');
+    let query = {};
+    let url = requestUrl || '/';
 
-    var pathName = this.fullPathName();
+    let pathName = this.fullPathName();
 
-    if(splitUrl.length > 1) {
+    if (splitUrl.length > 1) {
       url = splitUrl[0] || '/';
       query = querystring.parse(splitUrl[1] || '');
     }
 
-    var req = {
+    let req = {
+      url,
+      query,
       path: url,
-      url: url,
       method: 'GET',
       renderSynchronous: false,
       useCache: true,
-      query: query,
       headers: {
         referer: pathName,
       },
       //noop
-      set: function(header, value) {
-      }
-    }
+      set: () => { },
+    };
 
     return req;
   }

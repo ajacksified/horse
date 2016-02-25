@@ -6,8 +6,6 @@ import Router from 'koa-router';
 // Custom errors for fun and profit.
 import RouteError from './routeError';
 
-import co from 'co';
-
 class App {
   constructor (config={}) {
     this.config = config;
@@ -16,9 +14,6 @@ class App {
     // callbacks registered by plugins.
     this.router = new Router();
     this.emitter = new EventEmitter();
-
-    this.startRequest = config.startRequest || [];
-    this.endRequest = config.endRequest || [];
 
     this.plugins = [];
   }
@@ -31,13 +26,14 @@ class App {
   // Accepts routes / history changes, and forwards on the req object and
   // the response (a `defer` object). The last param, `function`, can be safely
   // ignored - it's fired after handling.
-  route (ctx) {
-    this.emit('route:start', ctx);
-    var middleware = this.router.routes().call(ctx);
-    var app = this;
+  async route (ctx, next) {
+    const app = this;
+    this.emit('route:start', ctx, ctx.req);
 
-    var match = this.router.match(ctx.path).filter((r) => {
-      return ~r.methods.indexOf(ctx.method);
+    let middleware = this.router.routes(ctx);
+
+    let match = this.router.match(ctx.path).path.filter((r) => {
+      return r.methods.includes(ctx.method);
     });
 
     if (!match.length) {
@@ -47,31 +43,16 @@ class App {
       });
     }
 
-    return co(function * () {
-      if (app.startRequest.length) {
-        app.startRequest.forEach(function(f) {
-          // pre-set it for the startRequest call
-          ctx.route = match[0];
-          return f.call(ctx, app);
-        });
-      }
-
-      yield* middleware;
-
-      if (app.endRequest.length) {
-        app.endRequest.forEach(function(f) {
-          return f.call(ctx, app);
-        });
-      }
-    }).then(() => {
+    try {
+      await middleware(ctx, next);
       this.emit('route:end', ctx);
-    }, (err) => {
-      if(this.config.debug) {
+    } catch (err) {
+      if (this.config.debug) {
         console.log(err, err.stack);
       }
 
       this.error(err, ctx, app);
-    });
+    }
   }
 
   registerPlugin (plugin) {
@@ -93,9 +74,8 @@ class App {
   }
 
   error (e, ctx) {
-    var status = e.status || 500;
-    var message = e.message || 'Unkown error';
-    var url = '/' + status;
+    let status = e.status || 500;
+    let url = '/' + status;
 
     if (this.config.debug) {
       console.log(e, e.stack);
